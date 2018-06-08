@@ -417,11 +417,16 @@ class DataSheet implements DataSheetInterface
                 }
                 $subsheet->getColumns()->addFromExpression($subsheet_attribute_alias);
                 // Add the related object key alias of the relation to the subsheet to that subsheet. This will be the right key in the future JOIN.
-                if ($rel_path_to_subsheet_right_key = $sheetObject->getRelation($rel_path_to_subsheet)->getRelatedObjectKeyAlias()) {
-                    $subsheet->getColumns()->addFromExpression(RelationPath::relationPathAdd($rel_path_in_main_ds, $rel_path_to_subsheet_right_key));
+                $subsheet_relation = $sheetObject->getRelation($rel_path_to_subsheet);
+                if ($rel_path_to_subsheet_right_key = $subsheet_relation->getRelatedObjectKeyAlias()) {
+                    // Do nothing - everything is OK
+                } elseif ($subsheet_relation->isReverseRelation()) {
+                    // FIXME #relatedObjectKeyAlias
+                    $rel_path_to_subsheet_right_key = $subsheet_relation->getForeignKeyAlias();
                 } else {
                     throw new DataSheetUidColumnNotFoundError($this, 'Cannot find UID (primary key) for subsheet: no key alias can be determined for the relation "' . $rel_path_to_subsheet . '" from "' . $sheetObject->getAliasWithNamespace() . '" to "' . $sheetObject->getRelation($rel_path_to_subsheet)->getRelatedObject()->getAliasWithNamespace() . '"!');
                 }
+                $subsheet->getColumns()->addFromExpression(RelationPath::relationPathAdd($rel_path_in_main_ds, $rel_path_to_subsheet_right_key));
             } else {
                 throw new DataSheetReadError($this, 'QueryBuilder "' . get_class($query) . '" cannot read attribute "' . $attribute->getAliasWithRelationPath() . '" of object "' . $attribute->getObject()->getAliasWithNamespace() .'"!');
             }
@@ -548,12 +553,21 @@ class DataSheet implements DataSheetInterface
                     if ($thisObject->getRelation($rel_path)->getMainObjectKeyAttribute()) {
                         throw new DataSheetJoinError($this, 'Joining subsheets via reverse relations with explicitly specified foreign keys, not implemented yet!', '6T5V36I');
                     } else {
-                        $foreign_keys = $this->getUidColumn()->getValues();
-                        $subsheet->addFilterFromString($thisObject->getRelation($rel_path)->getForeignKeyAlias(), implode($thisObject->getRelation($rel_path)->getForeignKeyAttribute()->getValueListDelimiter(), array_unique($foreign_keys)), EXF_COMPARATOR_IN);
+                        $subsheet_relation = $thisObject->getRelation($rel_path);
+                        if ($subsheet_relation->isReverseRelation() && ! $subsheet_relation->getRelatedObjectKeyAlias()) {
+                            $foreign_keys = $this->getColumns()->getByExpression($subsheet_relation->getReversedRelation()->getRelatedObjectKeyAlias())->getValues();
+                            $subsheet_filter_alias = $subsheet_relation->getForeignKeyAlias();
+                            $subsheet_filter_attribute = $subsheet->getMetaObject()->getAttribute($subsheet_filter_alias);
+                        } else {
+                            $foreign_keys = $this->getUidColumn()->getValues();
+                            $subsheet_filter_alias = $subsheet_relation->getForeignKeyAlias();
+                            $subsheet_filter_attribute = $subsheet_relation->getForeignKeyAttribute();
+                        }
+                        $subsheet->addFilterFromString($subsheet_filter_alias, implode($subsheet_filter_attribute->getValueListDelimiter(), array_unique($foreign_keys)), EXF_COMPARATOR_IN);
                         // FIXME Fix Reverse relations key bug. Getting the left key column from the reversed relation here is a crude hack, but
                         // the get_main_object_key_alias() strangely does not work for reverse relations
-                        $left_key_column = $thisObject->getRelation($rel_path)->getReversedRelation()->getRelatedObjectKeyAlias();
-                        $right_key_column = $thisObject->getRelation($rel_path)->getForeignKeyAlias();
+                        $left_key_column = $subsheet_relation->getReversedRelation()->getRelatedObjectKeyAlias();
+                        $right_key_column = $subsheet_relation->getForeignKeyAlias();
                     }
                 }
                 $subsheet->dataRead();
