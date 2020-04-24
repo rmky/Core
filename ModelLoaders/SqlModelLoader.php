@@ -72,6 +72,10 @@ use exface\Core\CommonLogic\Selectors\UserRoleSelector;
 use exface\Core\CommonLogic\Selectors\UserSelector;
 use exface\Core\Factories\UiPageTreeFactory;
 use exface\Core\Exceptions\Security\AccessPermissionDeniedError;
+use exface\Core\Behaviors\StringEncryptingBehavior;
+use exface\Core\DataTypes\EncryptedStringDataType;
+use exface\Core\DataTypes\StringDataType;
+use exface\Core\DataTypes\UxonDataType;
 
 /**
  * 
@@ -632,7 +636,20 @@ class SqlModelLoader implements ModelLoaderInterface
         }
         // Merge config from the connection and the user credentials
         $config = UxonObject::fromJson($row['data_connector_config']);
-        $config = $config->extend(UxonObject::fromJson($row['user_connector_config']));
+        if ($row['user_connector_config'] !== null && $row['user_connector_config'] !== '' ) {
+            try {
+                UxonDataType::cast($row['user_connector_config']);
+                $config = $config->extend(UxonObject::fromJson($row['user_connector_config']));
+            } catch(\Exception $e) {
+                try {
+                    $decrypted = StringDataType::decrypt($this->getWorkbench(), $row['user_connector_config']);
+                    UxonDataType::cast($decrypted);
+                    $config = $config->extend(UxonObject::fromJson($decrypted));
+                } catch (\Exception $e) {
+                    $this->getWorkbench()->getLogger()->logException($e);
+                }
+            }
+        }
         // Instantiate the connection
         $connection = DataConnectionFactory::create(
             $connectorSelector,

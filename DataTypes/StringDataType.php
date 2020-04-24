@@ -6,6 +6,10 @@ use exface\Core\CommonLogic\DataTypes\AbstractDataType;
 use exface\Core\Exceptions\UnderflowException;
 use exface\Core\Exceptions\RangeException;
 use exface\Core\Exceptions\DataTypes\DataTypeValidationError;
+use exface\Core\Interfaces\AppInterface;
+use exface\Core\Interfaces\WorkbenchInterface;
+use exface\Core\Exceptions\Configuration\ConfigOptionNotFoundError;
+use exface\Core\Exceptions\RuntimeException;
 
 /**
  * Basic data type for textual values.
@@ -418,6 +422,34 @@ class StringDataType extends AbstractDataType
             }
             return $string;
         }
+    }
+    
+    public static function encrypt(WorkbenchInterface $exface, string $data)
+    {
+        $key = $exface->getConfig()->getOption("ENCRYPTION.SALT");
+        if ($key === null || $key === '') {
+            $key = sodium_crypto_kdf_keygen();
+            $exface->getConfig()->setOption("ENCRYPTION.SALT", sodium_bin2base64($key, 1), AppInterface::CONFIG_SCOPE_INSTALLATION);
+        } else {
+            $key = sodium_base642bin($key, 1);
+        }
+        $nonce = random_bytes(SODIUM_CRYPTO_SECRETBOX_NONCEBYTES);
+        $encryptedData = sodium_crypto_secretbox($data, $nonce, $key);
+        return sodium_bin2base64($nonce . $encryptedData, 1);
+    }
+    
+    // decrypt encrypted string
+    public static function decrypt(WorkbenchInterface $exface, string $data)
+    {
+        $key = $exface->getConfig()->getOption("ENCRYPTION.SALT");
+        if ($key === null || $key === '') {
+            throw new RuntimeException('Decryption salt is not set or empty, can not decrypt data!');
+        }
+        $key = sodium_base642bin($key, 1);
+        $decoded = sodium_base642bin($data, 1);
+        $nonce = mb_substr($decoded, 0, SODIUM_CRYPTO_SECRETBOX_NONCEBYTES, '8bit');
+        $ciphertext = mb_substr($decoded, SODIUM_CRYPTO_SECRETBOX_NONCEBYTES, null, '8bit');
+        return sodium_crypto_secretbox_open($ciphertext, $nonce, $key);
     }
 }
 ?>
