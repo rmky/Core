@@ -111,6 +111,11 @@ class ReadData extends AbstractAction implements iReadData
         return $this;
     }
     
+    public function getWidgetIdToReadFor() : ?string
+    {
+        return $this->widgetToReadFor;
+    }
+    
     /**
      * Returns the widget for which the data is to be read.
      * 

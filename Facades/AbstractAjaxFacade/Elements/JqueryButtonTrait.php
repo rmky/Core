@@ -15,6 +15,8 @@ use exface\Core\Interfaces\WidgetInterface;
 use exface\Core\Interfaces\Widgets\iUseInputWidget;
 use exface\Core\Widgets\DialogButton;
 use exface\Core\Widgets\Dialog;
+use exface\Core\Actions\PrefillWidget;
+use exface\Core\Factories\TaskFactory;
 
 /**
  * 
@@ -264,7 +266,9 @@ JS;
             $output = $this->buildJsClickSendToWidget($action, $input_element);
         } elseif ($action instanceof ResetWidget) {
             $output = $this->buildJsResetWidgets($widget);
-        } else {
+        } elseif ($action instanceof PrefillWidget) {
+            $output = $this->buildJsPrefillWidget($action, $input_element);
+        }else {
             $output = $this->buildJsClickCallServerAction($action, $input_element);
         }
         
@@ -551,6 +555,25 @@ JS;
                         }
 
 JS;
+    }
+    
+    protected function buildJsPrefillWidget(PrefillWidget $action, AbstractJqueryElement $input_element) : string
+    {
+        $task = TaskFactory::createEmpty($this->getWidget()->getWorkbench());
+        $task->setPageSelector($input_element->getPageId());
+        $widget = $action->getWidgetToReadFor($task);
+        $element = $this->getFacade()->getElement($widget);
+        $output = <<<JS
+var oView = this.getView();
+var oViewPrefillModel = oView.getModel('view');
+var oResultPrefillModel = oView.getModel();
+{$this->buildJsRequestDataCollector($action, $input_element)};
+var data = requestData;
+var testData = {data};
+
+JS;
+$output .= $element->getController()->buildJsPrefillLoader('oViewPrefillModel', 'oResultPrefillModel',  $element, '', '', '', 'testData');
+        return $output;
     }
     
     /**
