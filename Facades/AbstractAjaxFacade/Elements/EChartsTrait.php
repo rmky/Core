@@ -1991,13 +1991,6 @@ JS;
             default:
                 $js = $this->buildJsRedrawXYChart('newSelection', 'seriesIndex', 'rowData');
         }
-        /*if ($this->isPieChart() === true) {
-         $js = $this->buildJsRedrawPie('newSelection');
-         } elseif ($this->isGraphChart() === true) {
-         $js = $this->buildJsRedrawGraph('newSelection');
-         } else {
-         $js = $this->buildJsRedrawXYChart('newSelection', 'seriesIndex');
-         }*/
         
         return <<<JS
         
