@@ -413,12 +413,17 @@ JS;
         return <<<JS
         
             var echart = {$this->buildJsEChartsVar()};
-            var oSelected = {$selection};
+            var oSelected;
+            if ({$selection} == undefined) {
+                oSelected = undefined;
+            } else {
+                oSelected =  JSON.parse(JSON.stringify({$selection}))
+            }
             if (echart._oldselection === undefined) {
-                echart._oldSelection = {$selection};
+                echart._oldSelection = oSelected;
             } else {
                 if (({$this->buildJsRowCompare('echart._oldSelection', 'oSelected')}) === false) {
-                    echart._oldSelection = {$selection};
+                    echart._oldSelection = oSelected;
                 } else {
                     return;
                 }
@@ -741,21 +746,21 @@ JS;
             // if already slected piepart gets clicked again
             if ({$this->buildJsRowCompare('echart._oldSelection', 'dataRow')} == true) {
                 // deselect the pie part
-                {$this->buildJsCallEChartsAction('echart', 'pieUnSelect', 'params.seriesIndex', 'params.dataIndex')}
+                {$this->buildJsCallEChartsAction('echart', 'unselect', 'params.seriesIndex', 'params.dataIndex')}
                 {$this->buildJsSelect()}
             // if different part then already selected part gets clicked
             } else {
                 // deselect old pie part
                 var name = echart._oldSelection.{$this->getWidget()->getSeries()[0]->getTextDataColumn()->getDataColumnName()}
-                {$this->buildJsCallEChartsAction('echart', 'pieUnSelect', 'params.seriesIndex', null, 'name')}
+                {$this->buildJsCallEChartsAction('echart', 'unselect', 'params.seriesIndex', null, 'name')}
                 // select clicked pie part
-                {$this->buildJsCallEChartsAction('echart', 'pieSelect', 'params.seriesIndex', 'params.dataIndex')}
+                {$this->buildJsCallEChartsAction('echart', 'select', 'params.seriesIndex', 'params.dataIndex')}
                 {$this->buildJsSelect('dataRow')}
             }
         // if no pie part was selected
         } else {
             // select clicked pie part
-            {$this->buildJsCallEChartsAction('echart', 'pieSelect', 'params.seriesIndex', 'params.dataIndex')}
+            {$this->buildJsCallEChartsAction('echart', 'select', 'params.seriesIndex', 'params.dataIndex')}
             {$this->buildJsSelect('dataRow')}
         }
         
@@ -806,8 +811,14 @@ JS;
         var echart = {$this->buildJsEChartsVar()};
         var params = {$params};
         var dataRow = {$this->buildJsGetSelectedRowFunction('params.data')};
+        dataRow._seriesIndex = params.seriesIndex;
         var options = echart.getOption();
         var newOptions = {series: []};
+        var oldSelection = echart._oldSelection;
+        var sameSelection = {$this->buildJsRowCompare('echart._oldSelection', 'dataRow')};
+        console.log('new Selection:', dataRow);
+        console.log('old Selection', oldSelection);
+        console.log('same Selection', sameSelection);
         options.series.forEach(function(series){
             newOptions.series.push({markLine: {data: {}, _show: false}});
         });
@@ -1311,8 +1322,10 @@ JS;
     {
         $label = '{}';
         $position = $this->getWidget()->getLegendPosition();
-        if ($position !== null) {
+        if ($this->isLegendHidden() === false) {
             $label = '{show: false}';
+        } else {
+            $label = "{alignTo: 'labelLine'}";
         }
         if ($position == 'top' || $position == 'bottom' || $position == null) {
             $centerX = '50%';
@@ -1332,7 +1345,7 @@ JS;
     center: ['$centerX', '50%'],
     data: [],
     label: {$label},
-    //selectedMode: 'single',
+    selectedMode: 'single',
     animationType: 'scale',
     animationEasing: 'backOut',
     
@@ -1369,7 +1382,6 @@ JS;
 	height: '50%',
 	name: 'Graph',
     type: 'graph',
-	hoverAnimation: true,
 	animationEasing: 'backOut',
 	layout: '{$type}',
     //autoCurveness: 20,
@@ -1385,7 +1397,6 @@ JS;
 		layoutAnimation: false,
 	},
     roam: true,
-    focusNodeAdjacency: true,
     itemStyle: {
         normal: {
             color: '{$color}',
@@ -1402,6 +1413,8 @@ JS;
         color: 'source',
         {$curveness}
     },
+    focusNodeAdjacency: true,
+    hoverAnimation: true,
     emphasis: {
         scale: true,
         focus: 'adjacency',
@@ -1464,7 +1477,9 @@ JS;
         
         {
             type: 'sankey',
-            focusNodeAdjacency: 'allEdges',
+            emphasis: {
+                focus: 'adjacency'
+            },
             itemStyle: {
                 borderWidth: 1,
                 borderColor: '#aaa'
@@ -1487,7 +1502,7 @@ JS;
      */
     protected function buildJsAxes() : string
     {
-        if ($this->getChartType() !== $this->chartTypes[CHART_TYPE_XY]) {
+        if ($this->getChartType() !== $this->chartTypes[CHART_TYPE_XY] && $this->getChartType() !== $this->chartTypes[CHART_TYPE_HEATMAP]) {
             return '';
         }
         $countAxisRight = 0;
@@ -3003,7 +3018,7 @@ JS;
         $fnPositionJs = <<<JS
 function(canvasMousePos, params, tooltipDom, rect, sizes) {
         var echartsDom = tooltipDom.closest('.exf-chart');
-        var margin = 2; // How far away from the mouse should the tooltip be
+        var margin = 5; // How far away from the mouse should the tooltip be
         var overflowMargin = 5; // If no satisfactory position can be found, how far away from the edge of the window should the tooltip be kept
         
         var canvasRect = tooltipDom.parentElement.getElementsByTagName("canvas")[0].getBoundingClientRect();
@@ -3388,12 +3403,13 @@ JS;
     protected function isLegendHidden() : bool
     {
         $widget = $this->getWidget();
-        if ($widget->getLegendPosition() !== null) {
-            return false;
-        }
         if ($widget->getHideLegend() === true) {
             return true;
         }
+        if ($widget->getLegendPosition() !== null) {
+            return false;
+        }
+        
         $firstSeries = $widget->getSeries()[0];
         if (count($widget->getSeries()) === 1 && (($firstSeries instanceof PieChartSeries) === false || $firstSeries instanceof GraphChartSeries === false || $firstSeries instanceof SankeyChartSeries === false)) {
             if ($firstSeries->getValueDataColumn() === $firstSeries->getValueAxis()->getDataColumn()){
