@@ -1617,18 +1617,26 @@ JS;
             $rotate = '';
         }
         
+        //ticks for every value only works with axes of type 'category'
         if ($axis->hasTicksForEveryValue()) {
             $interval = 'interval: 0';
             $axisTick = <<<JS
             
         axisTick: {
+            show: true,
             alignWithLabel: false,
         },
         
 JS;
         } else {
             $interval = '';
-            $axisTick = '';
+            $axisTick = <<<JS
+            
+            axisTick: {
+                show: true
+            },
+
+JS;
         }
         $maxInterval = '';
         /*if ($axisType === ChartAxis::AXIS_TYPE_TIME) {
@@ -1673,11 +1681,14 @@ JS;
         },
         position: '{$position}',
         nameGap: {$nameGap},
-        axisLabel: {
+        axisLine: {
+            show: true
+        },
+        axisLabel: {            
             fontFamily: '{$this->baseAxisLabelFont()}',
             fontSize: {$this->baseAxisLabelFontSize()},
-            formatter: function(a) {
-                return {$this->buildJsLabelFormatter($axis->getDataColumn(), 'a')}
+            formatter: function(value, axisIndex) {
+                return {$this->buildJsLabelFormatter($axis->getDataColumn(), 'value')}
             },
             {$rotate}
             {$interval}

@@ -552,6 +552,7 @@ class ChartAxis extends AbstractChartPart implements iHaveCaption
     
     /**
      * Set to TRUE to force the axis to have ticks and labels for every value - otherwise ticks will be distributed automatically.
+     * This option only works for axis_type `category`. With all other types the labels will always be distributed automatically.
      * 
      * By default, ticks (label-markings) on the axis are distributed automatically in an
      * attempt to keep the axis values readable and not overcrowded. This means, some values
